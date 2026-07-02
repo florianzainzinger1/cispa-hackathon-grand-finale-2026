@@ -7,22 +7,30 @@ venv/
 __pycache__/
 *.pyc
 
-# Data & outputs (never commit datasets or results)
-data/
-output/
-outputs/
-
 # Caches
 .cache/
 .uv/
 
-# Model checkpoints & arrays
+# Logs & experiment tracking
+*.log
+wandb/
+
+# Data & outputs (never commit datasets or results)
+# NOTE: Task 1/data + Task 1/cache are intentionally tracked (committed before
+# these rules; needed to reproduce the Task 1 solution) — ignore rules only
+# affect new untracked files.
+data/
+output/
+outputs/
 *.pt
 *.pth
 *.ckpt
 *.npy
 *.npz
 
-# Logs & experiment tracking
-*.log
-wandb/
+# cloned third-party detector repos (pinned via Task 1/data/watermark_config.yaml)
+Task 1/external/
+
+# editor / tooling local state
+.idea/
+**/.claude/settings.local.json
