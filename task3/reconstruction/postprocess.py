@@ -29,9 +29,12 @@ def load_best_candidates(name):
 
 
 def quality_score(imgs):
+    """Higher = cleaner, more face-like. Rewards in-range pixels and moderate
+    contrast, strongly penalises high-frequency noise (TV). Raw std is NOT
+    rewarded because pixel noise inflates it."""
     st = U.image_stats(imgs)
-    q = st["rng_frac"] + torch.clamp(st["std"] / 0.2, max=1.0) \
-        - 0.5 * torch.clamp(st["tv"] - 0.2, min=0.0)
+    contrast = torch.clamp(st["std"] / 0.25, max=1.0)   # saturates; not unbounded
+    q = st["rng_frac"] + 0.3 * contrast - 2.0 * st["tv"]
     q = torch.where(st["finite"], q, torch.full_like(q, -1e9))
     return q
 
