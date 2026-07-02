@@ -54,11 +54,43 @@ SCORE_BINS_COARSE = np.array([0.0, 0.15, 0.5, 1.0, 2.0, 4.5, 9.5])
 DUAL_BINS = np.array([0.0, 0.5, 1.5, 4.0, 9.5])
 
 
+# margin / loser-suppression channel (top-48 candidate PRF reconstruction,
+# see build_margin_channel.py). Cond modes "margin" and "s3" for
+# gumbel/textseal follow the lp_match pattern: joint code = coarse u-bin x
+# margin level x logprob level, normalized per logprob level. Margin-level
+# edges come from TRAIN-CLEAN quantiles via set_margin_edges(). Default OFF:
+# only active when a cond dict explicitly selects "margin"/"s3" AND the
+# margin columns are attached to the frame.
+MARGIN_COL = {
+    ("gumbel", "margin"): "margin_gumbel",
+    ("textseal", "margin"): "margin_ts",
+    ("gumbel", "s3"): "s3_gumbel",
+    ("textseal", "s3"): "s3_ts",
+}
+MARGIN_EDGES: dict = {}
+
+
+def set_margin_edges(train_df: pd.DataFrame, n_levels: int = 3) -> None:
+    """Margin/s3 level edges = TRAIN-CLEAN quantiles (default terciles)."""
+    y = train_df["label"].to_numpy()
+    for (scheme, mode), col in MARGIN_COL.items():
+        if col not in train_df.columns:
+            continue
+        v = train_df[col].to_numpy().astype(np.float64)
+        first = train_df[f"{scheme}_first"].to_numpy()
+        sel = (y == 0) & (first == 1) & np.isfinite(v)
+        qs = np.linspace(0, 1, n_levels + 1)[1:-1]
+        MARGIN_EDGES[(scheme, mode)] = np.quantile(v[sel], qs)
+
+
 def signal_bins(scheme: str, mode: str | None) -> int:
     if mode == "lp_match":
         return 2 * (len(SCORE_BINS_COARSE) - 1)  # coarse u-bin x match bit
     if mode == "dual_lp":
         return (len(DUAL_BINS) - 1) ** 2  # joint (u_a, u_b) bins
+    if mode in ("margin", "s3"):
+        n_margin = len(MARGIN_EDGES[(scheme, mode)]) + 1
+        return n_margin * (len(SCORE_BINS_COARSE) - 1)
     return N_SIGNAL_BINS[scheme]
 
 
@@ -74,13 +106,21 @@ KGWPG_EDGES = np.array([0.02, 0.10, 0.25, 0.45, 0.65])
 KGWPG_EDGES_C = np.array([0.02, 0.35])
 KGWPG_ENT_EDGES_C = np.array([1.0])
 
+# analytic KGW emission (variant B): replace the fitted categorical kgw channel
+# with the exact per-position likelihood — clean: P(green)=pg, wm: soft-logit
+# tilt P(green)=pg*e^d/(1+pg*(e^d-1)). Per-token |logLR| <= delta by
+# construction (no heavy tails). Requires df["kgw_pgreen"].
+KGW_ANALYTIC = False
+KGW_DELTA = 1.5
+KGW_PG_CLIP = 1e-4
+
 
 def _n_levels(mode: str | None) -> int:
     if mode is None:
         return 1
     if mode in ("entropy",):
         return len(ENT_EDGES) + 1
-    if mode in ("logprob", "lp_match", "dual_lp"):
+    if mode in ("logprob", "lp_match", "dual_lp", "margin", "s3"):
         return len(LP_EDGES) + 1
     if mode == "pgreen":
         return len(PGREEN_EDGES) + 1
@@ -102,7 +142,7 @@ def _levels(df: pd.DataFrame, mode: str | None) -> np.ndarray:
     lp = np.nan_to_num(df["qwen_logprob"].to_numpy().astype(np.float64), nan=-1.0)
     if mode == "entropy":
         return np.digitize(ent, ENT_EDGES).astype(np.int16)
-    if mode in ("logprob", "lp_match", "dual_lp"):
+    if mode in ("logprob", "lp_match", "dual_lp", "margin", "s3"):
         return np.digitize(lp, LP_EDGES).astype(np.int16)
     if mode == "pgreen":
         pg = np.nan_to_num(df["unigram_pgreen"].to_numpy().astype(np.float64), nan=0.5)
@@ -246,6 +286,23 @@ def extract_observations(df: pd.DataFrame, use_entropy=False) -> dict[str, np.nd
             ubin = np.clip(np.digitize(score[ok], SCORE_BINS_COARSE) - 1, 0, nb_u - 1)
             codes[ok] = ubin + nb_u * match[ok]
             obs[scheme] = codes
+        if mode in ("margin", "s3"):
+            # joint coarse u-bin x margin/s3 level (train-clean quantile edges)
+            if scheme == "gumbel":
+                score = df["gumbel_score"].to_numpy().astype(np.float64).copy()
+                score[df["gumbel_first"].to_numpy() == 0] = np.nan
+            else:
+                score = df["textseal_score"].to_numpy().astype(np.float64).copy()
+                score[df["textseal_first"].to_numpy() == 0] = np.nan
+            mval = df[MARGIN_COL[(scheme, mode)]].to_numpy().astype(np.float64)
+            edges = MARGIN_EDGES[(scheme, mode)]
+            nb_u = len(SCORE_BINS_COARSE) - 1
+            codes = np.full(len(df), -1, dtype=np.int16)
+            ok = ~np.isnan(score) & np.isfinite(mval)
+            ubin = np.clip(np.digitize(score[ok], SCORE_BINS_COARSE) - 1, 0, nb_u - 1)
+            mbin = np.digitize(mval[ok], edges)
+            codes[ok] = ubin + nb_u * mbin
+            obs[scheme] = codes
         level = _levels(df, mode)
         ok = obs[scheme] >= 0
         obs[scheme][ok] = obs[scheme][ok] + signal_bins(scheme, mode) * level[ok]
@@ -331,6 +388,8 @@ def emission_loglik(df: pd.DataFrame, params: dict) -> np.ndarray:
     n = len(df)
     ll = np.zeros((n, 5), dtype=np.float64)
     for si, scheme in enumerate(SCHEMES):
+        if scheme == "kgw" and KGW_ANALYTIC:
+            continue  # handled analytically below
         codes = obs[scheme]
         ok = codes >= 0
         lc = params[scheme]["log_clean"][codes[ok]]
@@ -338,6 +397,20 @@ def emission_loglik(df: pd.DataFrame, params: dict) -> np.ndarray:
         # clean-state and all foreign W states see the null distribution
         for state in range(5):
             ll[ok, state] += np.where(state == si + 1, lw, lc)
+    if KGW_ANALYTIC:
+        green = df["kgw_green"].to_numpy().astype(np.float64)
+        first = df["kgw_first"].to_numpy()
+        pg = df["kgw_pgreen"].to_numpy().astype(np.float64)
+        ok = (green >= 0) & (first == 1) & ~np.isnan(pg)
+        g = green[ok]
+        p0 = np.clip(pg[ok], KGW_PG_CLIP, 1.0 - KGW_PG_CLIP)
+        ed = np.exp(KGW_DELTA)
+        p1 = p0 * ed / (1.0 + p0 * (ed - 1.0))
+        lc = g * np.log(p0) + (1.0 - g) * np.log(1.0 - p0)
+        lw = g * np.log(p1) + (1.0 - g) * np.log(1.0 - p1)
+        kgw_state = SCHEMES.index("kgw") + 1
+        for state in range(5):
+            ll[ok, state] += np.where(state == kgw_state, lw, lc)
     return ll
 
 

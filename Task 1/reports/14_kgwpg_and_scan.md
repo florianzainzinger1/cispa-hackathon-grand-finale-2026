@@ -62,6 +62,37 @@ innerhalb eines Dokuments nicht differenzieren; `localized_detect` ist ein
 Dokument-Level-Detektor (p-Wert „gibt es eine WM-Region?"), kein Token-Ranker.
 Span-Level-Aggregation macht unser Forward-Backward bereits optimal weich.
 
+## 2b. Finale Verdict-Runde (`src/eval_kgwpg_final.py`, ~23:30) — alle Varianten, volles Gate
+
+7-Punkte-Gate (val, valHA, valHB, revA, revB, train A→B, train B→A), fit-train clean:
+
+| Config | val | valHA | valHB | revA | revB | trA→B | trB→A | ≥champ |
+|---|---|---|---|---|---|---|---|---|
+| champion | 0.4384 | 0.5311 | 0.3816 | 0.5135 | 0.3824 | 0.3314 | 0.3802 | — |
+| binned E5 | 0.4427 | 0.5231 | 0.3387 | 0.5133 | 0.3380 | 0.3527 | 0.4072 | 3/7 |
+| binned E7 | 0.4452 | 0.5219 | 0.3381 | 0.5118 | 0.3376 | 0.3453 | 0.4085 | 3/7 |
+| **analytic B** (exakte Null, \|logLR\|≤δ) | **0.4253** | 0.5105 | 0.3431 | 0.4987 | 0.3408 | 0.3621 | 0.4097 | 2/7 |
+
+Drei neue Befunde:
+1. **Train- und Val-Splits widersprechen sich systematisch**: kgwpg gewinnt BEIDE
+   Train-Halves deutlich (+0.014…+0.028), verliert BEIDE Val-Halves (−0.008…−0.044).
+   Der Effekt transferiert innerhalb von Train, aber nicht nach Validation ⇒
+   Distribution-Shift der pgreen-konditionalen Green-Raten, nicht bloß Rauschen.
+2. **Per-Scheme-Kosten sichtbar**: KGW 0.189→0.278, aber gumbel 0.617→0.600 und
+   textseal 0.615→0.589 — kgwpg-FPs heben den gepoolten Threshold, die starken
+   Kanäle bezahlen. Netto +0.007, Gate-Anforderung (+0.01, keine gum/ts-Regression) verletzt.
+3. **Analytische LR (Variante B) verliert sogar pooled** (−0.013): der Soft-Logit-Tilt
+   modelliert das Self-Salt-KGW falsch (Caveat bestätigt); da \|logLR\|≤1.5 per
+   Konstruktion, bestätigt das unabhängig das Capped-Ergebnis (Caps 16/8/4/2.5
+   retten nichts, `eval_kgwpg_capped.py`).
+
+FP-Tail (Top-150 Clean, full val): champion 77% Boundary-Bleed (≤10 Tok. an echtem
+Span), binned 91–93%, pg<0.05-Anteil ≈ Base-Rate (0.43 vs ~0.46) ⇒ kein grobes
+pgreen-Overfitting; der Tail ist Boundary-Bleed, kgwpg konzentriert ihn nur stärker.
+Variante D (empirische Log-Odds pro Bin, train-only, geglättet) = strukturell identisch
+mit Variante A im HMM (per-Bin-Kategorial mit eps) — mitgetestet. Variante E
+(Scheme-Normalisierung) per Auftrag übersprungen, da A–D kein robustes Signal zeigen.
+
 ## 3. Konsequenz für die Gap-Analyse (0.3744 vs. SeeWeedZ 0.4688)
 
 Brainstorm-Scorecard: #1 KGW-LR gemessen→Artefakt · #2/#4 nativ/Scan gemessen→tot ·

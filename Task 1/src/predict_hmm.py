@@ -22,6 +22,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import hmm  # noqa: E402
 from hmm import fit_emissions, make_transitions, hmm_scores  # noqa: E402
+from hsmm import duration_logpmf_from, hsmm_scores  # noqa: E402
 from metrics import tpr_at_fpr  # noqa: E402
 
 CACHE_DIR = Path(__file__).resolve().parent.parent / "cache"
@@ -45,6 +46,23 @@ def main() -> int:
     parser.add_argument("--p-enter", type=float, default=0.02)
     parser.add_argument("--mean-span", type=float, default=45.0)
     parser.add_argument("--use-entropy", action="store_true")
+    parser.add_argument(
+        "--decode",
+        default="hmm",
+        choices=["hmm", "hsmm"],
+        help="hmm = champion 5-state decode (default); hsmm = explicit-duration "
+             "semi-Markov decode with empirical span-duration prior fitted on "
+             "the --fit split(s) (src/hsmm.py)",
+    )
+    parser.add_argument("--kappa", type=float, default=0.25,
+                        help="hsmm duration-prior add-count smoothing")
+    parser.add_argument("--geom-blend", type=float, default=0.0,
+                        help="hsmm: blend weight of a truncated geometric into the duration prior")
+    parser.add_argument("--hsmm-ensemble", action="store_true",
+                        help="hsmm: mean of -log10 P(clean) over priors "
+                             "{kappa=0.25, kappa=1.0, geom_blend=0.2}")
+    parser.add_argument("--processes", type=int, default=None,
+                        help="hsmm: multiprocessing workers for per-doc decode")
     parser.add_argument(
         "--cond",
         default=None,
@@ -77,7 +95,19 @@ def main() -> int:
     logA, logpi = make_transitions(args.p_enter, args.mean_span)
 
     df = load_signals(args.split, with_pg)
-    sc = hmm_scores(df, params, logA, logpi)
+    if args.decode == "hsmm":
+        if args.hsmm_ensemble:
+            prior_cfgs = [(0.25, 0.0), (1.0, 0.0), (0.25, 0.2)]
+        else:
+            prior_cfgs = [(args.kappa, args.geom_blend)]
+        parts = []
+        for kappa, blend in prior_cfgs:
+            logPD = duration_logpmf_from(fit_df, kappa=kappa, geom_blend=blend)
+            parts.append(hsmm_scores(df, params, logPD, pe=args.p_enter,
+                                     processes=args.processes))
+        sc = np.mean(parts, axis=0)
+    else:
+        sc = hmm_scores(df, params, logA, logpi)
 
     if "label" in df.columns:
         y = df["label"].to_numpy()
