@@ -1,3 +1,4 @@
-# Shell scripts must always have LF line endings (they run on JURECA/Linux)
+# Normalize all text files to LF (repo is shared between Windows, WSL, and JURECA/Linux)
+* text=auto eol=lf
 *.sh text eol=lf
 *.py text eol=lf
