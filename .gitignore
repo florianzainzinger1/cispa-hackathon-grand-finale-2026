@@ -1,1 +1,28 @@
+# Environments
+.venv/
+venv/
 .env
+
+# Python
+__pycache__/
+*.pyc
+
+# Data & outputs (never commit datasets or results)
+data/
+output/
+outputs/
+
+# Caches
+.cache/
+.uv/
+
+# Model checkpoints & arrays
+*.pt
+*.pth
+*.ckpt
+*.npy
+*.npz
+
+# Logs & experiment tracking
+*.log
+wandb/
