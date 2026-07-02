@@ -47,12 +47,24 @@ def compute_grad_vector(model, images, labels, keys, name2param):
     return torch.cat([g.reshape(-1) for g in grads])
 
 
+def load_bank(base_res, device):
+    p = U.work_path("outputs", "face_bank.pt")
+    if not os.path.exists(p):
+        return None
+    imgs = torch.load(p, weights_only=False)["images"].float()
+    if base_res != 64:
+        imgs = torch.nn.functional.interpolate(imgs, size=(base_res, base_res),
+                                               mode="bilinear", align_corners=False)
+    return imgs.clamp(0, 1).to(device)
+
+
 def optimize(name, iters=4000, restarts=1, tv=1e-4, lr=0.1, device="cpu",
-             init_images=None, seed=0, log_every=500):
+             base_res=64, init_mode="noise", seed=0, log_every=500):
+    """Parametrise images at base_res (upsampled to 64 in the forward) to impose
+    smoothness; init from noise or the face bank. best kept by cosine (=lowest
+    grad-mismatch), independent of the TV term."""
     model, grad = build_any(name)
     model = model.to(device)
-    # params MUST require grad: the dummy gradient is d(CE)/d(params). We never
-    # step them (optimiser holds only the image), so they stay fixed.
     for p in model.parameters():
         p.requires_grad_(True)
     name2param = dict(model.named_parameters())
@@ -61,36 +73,46 @@ def optimize(name, iters=4000, restarts=1, tv=1e-4, lr=0.1, device="cpu",
     real_unit = real / (real.norm() + 1e-12)
     labels = IL.assign_labels(name, U.N_IMAGES).to(device)
 
+    def up(z):
+        if base_res == 64:
+            return z
+        return torch.nn.functional.interpolate(z, size=(64, 64), mode="bilinear",
+                                               align_corners=False)
+
+    bank = load_bank(base_res, device) if init_mode == "bank" else None
     best = None
-    best_loss = float("inf")
+    best_cos = -1.0
     for r in range(restarts):
         g = torch.Generator().manual_seed(seed + r)
-        if init_images is not None:
-            x = init_images.clone().to(device)
+        if bank is not None:
+            perm = torch.randperm(bank.shape[0], generator=g)[:U.N_IMAGES]
+            z = bank[perm].clone()
         else:
-            x = torch.rand(U.N_IMAGES, 3, 64, 64, generator=g).to(device)
-        x.requires_grad_(True)
-        opt = torch.optim.Adam([x], lr=lr)
+            z = torch.rand(U.N_IMAGES, 3, base_res, base_res, generator=g).to(device)
+        z.requires_grad_(True)
+        opt = torch.optim.Adam([z], lr=lr)
         sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, iters)
         for it in range(iters):
             opt.zero_grad()
-            dummy = compute_grad_vector(model, x.clamp(0, 1), labels, keys, name2param)
+            x = up(z).clamp(0, 1)
+            dummy = compute_grad_vector(model, x, labels, keys, name2param)
             dunit = dummy / (dummy.norm() + 1e-12)
             cos = (dunit * real_unit).sum()
-            loss = (1 - cos) + tv * U.total_variation(x.clamp(0, 1)).mean()
-            # gradient w.r.t. the image only (leave model params' .grad untouched)
-            gx = torch.autograd.grad(loss, x)[0]
-            x.grad = gx
+            loss = (1 - cos) + tv * U.total_variation(x).mean()
+            gz = torch.autograd.grad(loss, z)[0]
+            z.grad = gz
             opt.step()
             sched.step()
             with torch.no_grad():
-                x.clamp_(0, 1)
+                z.clamp_(0, 1)
             if log_every and (it % log_every == 0 or it == iters - 1):
                 print(f"  {name} r{r} it{it:5d} cos={cos.item():.4f} loss={loss.item():.4f}")
-        fl = loss.item()
-        if fl < best_loss:
-            best_loss = fl
-            best = x.detach().clamp(0, 1).cpu()
+        with torch.no_grad():
+            xf = up(z).clamp(0, 1)
+        if cos.item() > best_cos:
+            best_cos = cos.item()
+            best = xf.detach().cpu()
+    best_loss = 1 - best_cos
     out_dir = U.work_path("candidates", name)
     U.ensure_dir(out_dir)
     torch.save({"images": best, "source": "optimization", "best_loss": best_loss},
@@ -106,11 +128,17 @@ def main():
         device = "cpu"
     iters = int(os.environ.get("FL_ITERS", "4000"))
     restarts = int(os.environ.get("FL_RESTARTS", "1"))
-    print("device:", device, "iters:", iters, "restarts:", restarts)
+    base_res = int(os.environ.get("FL_BASE_RES", "64"))
+    init_mode = os.environ.get("FL_INIT", "noise")
+    tv = float(os.environ.get("FL_TV", "1e-4"))
+    lr = float(os.environ.get("FL_LR", "0.1"))
+    print(f"device={device} iters={iters} restarts={restarts} "
+          f"base_res={base_res} init={init_mode} tv={tv} lr={lr}")
     names = sys.argv[1:] or ["model9", "model11"]
     for name in names:
         try:
-            optimize(name, iters=iters, restarts=restarts, device=device)
+            optimize(name, iters=iters, restarts=restarts, device=device,
+                     base_res=base_res, init_mode=init_mode, tv=tv, lr=lr)
         except Exception as e:
             import traceback
             print(f"{name}: ERROR {e}")

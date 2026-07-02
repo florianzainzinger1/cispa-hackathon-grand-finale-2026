@@ -102,11 +102,15 @@ def run_model(name, device="cpu", steps=400, topk=256):
     elif act == "tanh":
         targ = targ.clamp(-1.0, 1.0)
 
-    # strided convs: optimise a smooth low-res latent (= feature resolution)
-    base_res = 64 if model.stride == 1 else grad["feature_shape"][1]
-    rec = invert_conv(model, targ, steps=steps, lr=0.05, tv=1e-4,
+    # strided convs: optimise a smooth low-res latent (= feature resolution) with
+    # stronger TV + lower LR to suppress the high-frequency checkerboard.
+    strided = model.stride > 1
+    base_res = 64 if not strided else grad["feature_shape"][1]
+    rec = invert_conv(model, targ, steps=steps,
+                      lr=0.03 if strided else 0.05,
+                      tv=5e-3 if strided else 1e-4,
                       device=device, base_res=base_res)
-    print(f"{name}: base_res={base_res}")
+    print(f"{name}: base_res={base_res} strided={strided}")
     out_dir = U.work_path("candidates", name)
     torch.save({"images": rec, "rows": rows, "source": "conv_invert"},
                os.path.join(out_dir, "conv_invert_candidates.pt"))
