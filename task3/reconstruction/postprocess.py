@@ -14,6 +14,37 @@ import torch.nn.functional as F
 import utils as U
 
 
+def _gaussian_kernel(sigma, k):
+    ax = torch.arange(k) - (k - 1) / 2
+    g = torch.exp(-(ax ** 2) / (2 * sigma ** 2))
+    g = g / g.sum()
+    return g
+
+
+def gaussian_blur(imgs, sigma=1.0, k=5):
+    """Separable depthwise Gaussian blur (no torchvision)."""
+    g = _gaussian_kernel(sigma, k).to(imgs.dtype)
+    kx = g.view(1, 1, 1, k).repeat(3, 1, 1, 1)
+    ky = g.view(1, 1, k, 1).repeat(3, 1, 1, 1)
+    p = k // 2
+    x = F.pad(imgs, (p, p, 0, 0), mode="reflect")
+    x = F.conv2d(x, kx, groups=3)
+    x = F.pad(x, (0, 0, p, p), mode="reflect")
+    x = F.conv2d(x, ky, groups=3)
+    return x
+
+
+def adaptive_denoise(imgs, tv_lo=0.10, tv_hi=0.28, max_alpha=0.8, sigma=1.0):
+    """Blend each image toward a blurred copy in proportion to its noise level
+    (per-image TV). Clean faces (low TV) stay sharp; noisy reconstructions get
+    smoothed toward their underlying face, which raises SSIM."""
+    tv = U.total_variation(imgs)
+    alpha = ((tv - tv_lo) / (tv_hi - tv_lo)).clamp(0, 1) * max_alpha
+    blurred = gaussian_blur(imgs, sigma)
+    a = alpha.view(-1, 1, 1, 1)
+    return ((1 - a) * imgs + a * blurred).clamp(0, 1)
+
+
 def load_best_candidates(name):
     """Prefer conv-inverted images (CNN), else analytic direct/feature images."""
     d = U.work_path("candidates", name)
@@ -107,12 +138,14 @@ def select_128(imgs, n=128, seed=0, denoise=True):
     return reps, chosen[:n]
 
 
-def run_model(name, n=128):
+def run_model(name, n=128, denoise_final=True):
     imgs, src = load_best_candidates(name)
     if imgs is None:
         print(f"{name}: no candidates")
         return None
     sel, idx = select_128(imgs, n=n)
+    if denoise_final:
+        sel = adaptive_denoise(sel)
     out_dir = U.work_path("candidates", name)
     torch.save({"images": sel, "source": src},
                os.path.join(out_dir, "selected_128.pt"))
