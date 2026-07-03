@@ -26,6 +26,7 @@ import torch
 import torch.nn.functional as F
 
 import utils as U
+from postprocess import adaptive_denoise
 
 
 # ----------------------------------------------------------------------------
@@ -54,37 +55,35 @@ def is_real(st, tv_cut=0.20, rng_cut=0.55):
 # ----------------------------------------------------------------------------
 # candidate pool loading
 # ----------------------------------------------------------------------------
-def load_pool(name, use_refined=True, refine_min_delta=0.02):
-    """Return (images, source). Prefer refined (if it improved cosine), then the
-    RAW candidate pools (bigger than v1's selected_128), then selected_128."""
+def load_pool(name):
+    """Return (images, source): the per-model reconstruction pool.
+
+    NOTE: the gradient-matching `refined.pt` is deliberately NOT used — at
+    batch-128 it converges to a high-cosine NOISE solution (verified: cos 0.98
+    yet pure RGB/color noise for MLP/CNN/ViT alike). We use only the analytic
+    attack outputs, which actually contain faces:
+      * selected_128 (v1's curated per-model set) — a good base, esp. MLP.
+      * conv_invert (CNN) — the full inverted pool (more clean slots than v1 kept).
+      * analytic images_norm (MLP only) — sharp single-neuron faces with correct
+        per-image min-max scaling (handles tanh/sigmoid MLPs the raw clamp broke).
+    """
     d = U.work_path("candidates", name)
-    dv3 = U.work_path("candidates_v3", name)
     parts, srcs = [], []
 
-    # refined batch (gradient-matching) — only if it actually improved cosine
-    rp = os.path.join(dv3, "refined.pt")
-    if use_refined and os.path.exists(rp):
-        blob = torch.load(rp, weights_only=False)
-        if float(blob.get("cos_final", 0)) - float(blob.get("cos_start", 0)) >= refine_min_delta:
-            parts.append(blob["images"].float()); srcs.append("refined")
+    sc = os.path.join(d, "selected_128.pt")
+    if os.path.exists(sc):
+        parts.append(torch.load(sc, weights_only=False)["images"].float()); srcs.append("selected_128")
 
-    # raw conv-invert pool (CNN) — full topk, not just the 128 v1 kept
     ci = os.path.join(d, "conv_invert_candidates.pt")
     if os.path.exists(ci):
         parts.append(torch.load(ci, weights_only=False)["images"].float()); srcs.append("conv_invert")
 
-    # raw analytic pool (MLP direct images, or CNN feature-view)
     ac = os.path.join(d, "analytic_candidates.pt")
     if os.path.exists(ac):
         blob = torch.load(ac, weights_only=False)
-        imgs = blob.get("images")
-        if imgs is not None:
-            parts.append(imgs.float()); srcs.append("analytic")
-
-    # v1 selected_128 as a last resort (already curated)
-    sc = os.path.join(d, "selected_128.pt")
-    if not parts and os.path.exists(sc):
-        parts.append(torch.load(sc, weights_only=False)["images"].float()); srcs.append("selected_128")
+        # only MLP direct-image analytic gives real faces; CNN "feature_view" is not
+        if blob.get("source") == "direct_image" and blob.get("images_norm") is not None:
+            parts.append(blob["images_norm"].float()); srcs.append("analytic_norm")
 
     if not parts:
         return None, None
@@ -93,9 +92,11 @@ def load_pool(name, use_refined=True, refine_min_delta=0.02):
 
 
 def load_bank():
-    p = U.work_path("outputs", "face_bank.pt")
-    if os.path.exists(p):
-        return torch.load(p, weights_only=False)["images"].float().clamp(0, 1)
+    # prefer the rebuilt clean/diverse v3 bank, fall back to v1's bank
+    for p in (U.work_path("outputs_v3", "face_bank_v3.pt"),
+              U.work_path("outputs", "face_bank.pt")):
+        if os.path.exists(p):
+            return torch.load(p, weights_only=False)["images"].float().clamp(0, 1)
     return None
 
 
@@ -146,7 +147,7 @@ def farthest_point_fill(pool_imgs, pool_feats, have_feats, n_needed):
     return chosen
 
 
-def select_model(name, n=128, tv_cut=0.20, dedup_eps=0.08, verbose=True):
+def select_model(name, n=128, tv_cut=0.22, dedup_eps=0.03, verbose=True):
     imgs, src = load_pool(name)
     bank = load_bank()
     info = {"name": name, "pool_source": src}
@@ -190,6 +191,9 @@ def select_model(name, n=128, tv_cut=0.20, dedup_eps=0.08, verbose=True):
     info["padded"] = max(0, n - info["from_reconstruction"] - info["from_bank"])
 
     sel = torch.stack(reps[:n]).clamp(0, 1).float()
+    # TV-gated denoise: only smooths noisy (high-TV) reconstruction slots toward
+    # their underlying face; clean faces (low TV) and bank faces stay sharp.
+    sel = adaptive_denoise(sel, tv_lo=0.12, tv_hi=0.28, max_alpha=0.6, sigma=1.0)
     out_dir = U.work_path("candidates_v3", name)
     U.ensure_dir(out_dir)
     torch.save({"images": sel, "info": info},
