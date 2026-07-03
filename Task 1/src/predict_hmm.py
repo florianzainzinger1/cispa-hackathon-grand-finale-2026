@@ -22,7 +22,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import hmm  # noqa: E402
 from hmm import fit_emissions, make_transitions, hmm_scores  # noqa: E402
-from hsmm import duration_logpmf_from, hsmm_scores  # noqa: E402
+from hsmm import duration_logpmf_from, span_count_logpmf_from, hsmm_scores  # noqa: E402
 from metrics import tpr_at_fpr  # noqa: E402
 
 CACHE_DIR = Path(__file__).resolve().parent.parent / "cache"
@@ -63,6 +63,15 @@ def main() -> int:
                              "{kappa=0.25, kappa=1.0, geom_blend=0.2}")
     parser.add_argument("--processes", type=int, default=None,
                         help="hsmm: multiprocessing workers for per-doc decode")
+    parser.add_argument("--min-gap", type=int, default=1,
+                        help="hsmm: refractory — a new span may start only after "
+                             ">= min_gap clean tokens since the previous span "
+                             "ended (label fact: 12). 1 = off (default)")
+    parser.add_argument("--count-prior", action="store_true",
+                        help="hsmm: per-doc span-count prior (smoothed +0.25 "
+                             "empirical pmf over 0..6 from the --fit labels)")
+    parser.add_argument("--count-kappa", type=float, default=0.25,
+                        help="hsmm: span-count prior add-count smoothing")
     parser.add_argument(
         "--cond",
         default=None,
@@ -100,11 +109,14 @@ def main() -> int:
             prior_cfgs = [(0.25, 0.0), (1.0, 0.0), (0.25, 0.2)]
         else:
             prior_cfgs = [(args.kappa, args.geom_blend)]
+        logPN = (span_count_logpmf_from(fit_df, kappa=args.count_kappa)
+                 if args.count_prior else None)
         parts = []
         for kappa, blend in prior_cfgs:
             logPD = duration_logpmf_from(fit_df, kappa=kappa, geom_blend=blend)
             parts.append(hsmm_scores(df, params, logPD, pe=args.p_enter,
-                                     processes=args.processes))
+                                     processes=args.processes,
+                                     min_gap=args.min_gap, logPN=logPN))
         sc = np.mean(parts, axis=0)
     else:
         sc = hmm_scores(df, params, logA, logpi)
