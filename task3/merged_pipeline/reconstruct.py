@@ -120,13 +120,16 @@ def reconstruct(name, topk=None, steps=None, dev="cpu"):
         gW = lowrank_denoise(gW, k)                         # <-- OUR lever #1
         meta["lowrank_k"] = k
         ratio, reliable = ratio_rows(gW, gb)
-        cand = ratio.reshape(-1, 3, 64, 64)
-        imgs = U.per_image_minmax(cand)                    # net.0 input is the [0,1] image
-        st = U.image_stats(imgs)
+        cand = ratio.reshape(-1, 3, 64, 64)                # RAW ratio
+        # BUGFIX: score on the RAW ratio so rng_frac discriminates noisy (out-of-range)
+        # rows -- per_image_minmax forces [0,1] and makes rng_frac==1 for ALL rows,
+        # collapsing the noise filter (matches teammate attack_analytic: score raw,
+        # normalise only the kept rows).
+        st = U.image_stats(cand)
         score = st["rng_frac"] * torch.clamp(st["std"] / 0.15, max=1.0)
         score = torch.where(reliable & st["finite"], score, torch.zeros_like(score))
         keep = torch.argsort(score, descending=True)[:topk]
-        return imgs[keep].clamp(0, 1).float(), meta
+        return U.per_image_minmax(cand[keep]).clamp(0, 1).float(), meta   # normalise AFTER
 
     # ---- CNN: ratio rows are FEATURES -> score -> invert conv ----
     C_, H, W = fshape
