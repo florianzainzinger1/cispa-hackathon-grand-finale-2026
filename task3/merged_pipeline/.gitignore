@@ -1,0 +1,5 @@
+work/
+viz/
+submission*.pt
+*.log
+__pycache__/
