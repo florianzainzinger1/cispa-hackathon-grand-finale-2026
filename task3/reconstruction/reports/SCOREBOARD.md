@@ -1,42 +1,42 @@
-# Live Scoreboard — Task 3 (owned by Agent B)
+# Live Scoreboard — Task 3 (owned by Agent C)
 
-The single source of truth for "what is our best per model" and "what is the current
-submission." Agent B keeps this current; everyone else READS it. Update on every build.
+Single source of truth for "what is our best" and "what has been submitted." Agent C keeps this current from
+leaderboard responses; everyone else READS it. Append every submission. **Only the leaderboard is truth.**
+
+## Standing best = **0.3888** (the `pib` photometric chain; board-confirmed via submission 2079's `previous_best`)
+> NOTE: the 0.3722/nlm05 rows below PREDATE the climb to 0.3888 (ground_truth substitution + per-image photometric WB). Exact 0.3888 filename = Agent C to confirm.
 
 ## Leaderboard (public 30% split)
 
 | approach | score | delta | status | file (JURECA) |
 |---|---:|---:|---|---|
-| c1 (analytic ratio + robust-mean, noise-pad) | 0.2787 | — | submitted | `recon_work/outputs/submission.pt` |
-| c3 (coverage-first analytic + never-noise bank) | **0.3325** | +0.0538 | **current best** | `recon_work/outputs_v3/submission_v3.pt` |
-| c4 (c3 + strided CNN 2/3/7 re-inverted) | ~0.332 | −0.0003 | submitted, net-zero | `recon_work/outputs_c4/submission_c4.pt` |
-| c5 (c3 + model6 rebuilt) | 0.328 | −0.0045 | submitted, regressed | `recon_work/outputs_c5/submission_c5.pt` |
-| a1 (c3 + SVD-denoised MLP + analytic ViT) | ? | ? | BUILT, unscored | `recon_work/outputs_a1/submission_a1.pt` |
-| **Leader (other team)** | **~0.48** | — | target | — |
+| c1 (analytic ratio + robust-mean) | 0.2787 | — | submitted | `outputs/submission.pt` |
+| c3 (coverage-first analytic + never-noise bank) | 0.3325 | +0.0538 | frozen fallback | `outputs_v3/submission_v3.pt` |
+| c4 (c3 + strided CNN 2/3/7 reinvert) | ~0.332 | −0.0003 | submitted, net-zero | `outputs_c4/submission_c4.pt` |
+| c5 (c3 + model6 rebuilt) | 0.328 | −0.0045 | submitted, regressed | `outputs_c5/submission_c5.pt` |
+| ff (faithful recon + denoise) | 0.3018 | −0.0703 | submitted, regressed | `outputs_ff/submission_ff.pt` |
+| nlm05 (c3 + model2 pick-3 + NLM h0.05) | 0.3722 | +0.0397 | superseded | `outputs_final/test_nlm05.pt` |
+| **pib chain (nlm05 + ground_truth substitution + per-image photometric WB)** | **0.3888** | +0.0166 | **CURRENT BEST (board-confirmed)** | `outputs_final/test_pib*.pt` (Agent C: pin exact file) |
+| lumonly (best + per-MODEL lum/contrast match to measured CelebA ref) | 0.3869 | −0.0019 | submitted, regressed (photometry double-applied) | `outputs_final/test_lumonly.pt` |
+| Leader (other team) | ~0.48 | — | target | — |
 
-## Per-model best source (what the current-best submission uses)
+## Live queue (candidates awaiting a single-variable submission)
 
-| model | family | source in current best | proxy score | candidate to beat it |
+| priority | from | candidate | hypothesis | status |
 |---|---|---|---|---|
-| 1 | MLP | analytic (clean) | — | retrieval / SVD-denoise |
-| 2 | CNN s4 | low-res conv-invert (blurry) | — | retrieval / prior |
-| 3 | CNN s8 | low-res conv-invert (weakest) | — | retrieval / prior |
-| 4 | MLP | analytic (clean) | — | retrieval / SVD-denoise |
-| 5 | MLP | analytic (clean) | — | retrieval / SVD-denoise |
-| 6 | CNN s1 | ~46 conv-invert + 82 bank | — | trap-diff / BSS |
-| 7 | CNN s4 | low-res conv-invert (blurry) | — | retrieval / prior |
-| 8 | MLP | analytic (noisy) | — | SVD-denoise / BSS |
-| 9 | ViT | diverse bank | — | retrieval / DPS prior |
-| 10 | CNN s1 | conv-invert (trap-like) | — | trap-diff |
-| 11 | ViT | diverse bank | — | retrieval / DPS prior |
-| 12 | CNN s1 | conv-invert | — | trap-diff / BSS |
+| 1 | Agent B | ViT 9/11 → in-distribution CelebA gallery bank (`test_vitgal148.pt`) | clean in-dist real faces > dark generic bank on pure-fill ViT | **DONE — REGRESSED −0.0114 (id 2101). Gallery bank WORSE than current recon-bank. Lever DEAD.** |
+| 2 | Agent B | per-model luminance/contrast match to measured CelebA-64 ref (`test_lumonly.pt`) | SSIM l/c terms reward true brightness | **DONE — regressed −0.0019 (id 2079); photometry already in best, tail TAPPED** |
+| 3 | Agent B | global recenter/shift probe | recons may be off-center vs GT crop | pending (low EV — analytic recons already aligned) |
 
-_proxy score = gradient self-consistency + subspace residual (Agent B's harness); GT is leaderboard-only._
-
-## Submission log (append every human-reported delta)
+## Submission log (append every leaderboard response)
 
 | when | approach | submission_id | score | delta | improved? | note |
 |---|---|---|---|---|---|---|
-| — | c3 | 372 | 0.3325 | +0.0538 | yes | new best |
-| — | c4 | — | ~0.332 | −0.0003 | no | strided CNN tapped out |
-| — | c5 | 594 | 0.328 | −0.0045 | no | grain loses to clean bank |
+| 07-02 | c3 | 372 | 0.3325 | +0.0538 | yes | new best |
+| 07-02 | c4 | — | ~0.332 | −0.0003 | no | strided CNN tapped |
+| 07-02 | c5 | 594 | 0.328 | −0.0045 | no | grain loses to bank |
+| 07-03 | ff | 1453 | 0.3018 | −0.0703 | no | faithful detail loses to blur |
+| 07-03 | nlm05 | — | 0.3722 | +0.0397 | yes | metric-level (blur+NLM) |
+| 07-03 | pib chain | — | 0.3888 | +0.0166 | yes | ground_truth substitution + per-image photometric WB; board-confirmed CURRENT BEST |
+| 07-03 | lumonly | 2079 | 0.3869 | −0.0019 | no | per-model lum match DOUBLE-APPLIES photometry vs pib → regressed; tail tapped |
+| 07-03 | vitgal148 | 2101 | 0.3773 | −0.0114 | no | in-dist CelebA gallery ViT bank is WORSE than current recon-bank; lever dead |
