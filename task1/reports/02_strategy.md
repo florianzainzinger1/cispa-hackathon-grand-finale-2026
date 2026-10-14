@@ -85,7 +85,7 @@ Low/zero-entropy tokens (forced continuations, repeated ngrams, chat markers, nu
 ## 6. Engineering & deployment
 
 ```
-Task 1/
+task1/
 ├── data/…                  # dataset, YAML, tokenizer (done)
 ├── external/…              # 3 detector repos @ pinned commits (done, local + cluster)
 ├── src/

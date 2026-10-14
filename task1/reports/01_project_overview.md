@@ -18,7 +18,7 @@ Git: single branch `main`, one commit (`3dceefc init`). The working tree content
 CISPA-Hackathon/
 ├── .env.example                                  # API_KEY="YOUR_API_KEY" placeholder
 ├── .gitignore                                    # ignores ".env" only
-└── Task 1/
+└── task1/
     ├── .claude/settings.local.json               # local Claude Code permission settings (tooling, not project)
     ├── Task 1 Text Watermark Localization.pdf    # ★ authoritative Task 1 specification (5 pages)
     ├── Tasks-Final.pdf                           # slide deck covering Tasks 1, 2, and 3 (31 slides)
@@ -39,14 +39,14 @@ There is **no source code, no dataset, no YAML config, no notebook, and no scrip
 
 | File | Role |
 |---|---|
-| `Task 1/Task 1 Text Watermark Localization.pdf` | **Primary task spec**: goal, dataset schema, evaluation metric, submission format, leaderboard, references. |
-| `Task 1/Tasks-Final.pdf` (pages 1–13) | Slide version of Task 1: red-green list intuition, worked example, scoring, data splits, submission format. |
-| `Task 1/kirchenbauer23a.pdf` | "A Watermark for Large Language Models" (Kirchenbauer et al., ICML 2023) — the **KGW** scheme (red/green lists seeded by previous-token hash). |
-| `Task 1/2605.12456v2.pdf` | "TextSeal: A Localized LLM Watermark for Provenance & Distillation Protection" (Sander et al., FAIR/Meta, arXiv 2026) — **TextSeal**, built on Gumbel-max sampling. |
-| `Task 1/3976_Provable_Robust_Watermark.pdf` | "Provable Robust Watermarking for AI-Generated Text" (Zhao et al., ICLR 2024) — the **Unigram** watermark (fixed global green list). |
-| `Task 1/watermark.ppt` | Scott Aaronson's talk slides "Watermarking GPT Outputs" — the **Gumbel-Max** scheme (verified via file metadata: author Scott Aaronson, PowerPoint, last saved Dec 2022). |
+| `task1/Task 1 Text Watermark Localization.pdf` | **Primary task spec**: goal, dataset schema, evaluation metric, submission format, leaderboard, references. |
+| `task1/Tasks-Final.pdf` (pages 1–13) | Slide version of Task 1: red-green list intuition, worked example, scoring, data splits, submission format. |
+| `task1/kirchenbauer23a.pdf` | "A Watermark for Large Language Models" (Kirchenbauer et al., ICML 2023) — the **KGW** scheme (red/green lists seeded by previous-token hash). |
+| `task1/2605.12456v2.pdf` | "TextSeal: A Localized LLM Watermark for Provenance & Distillation Protection" (Sander et al., FAIR/Meta, arXiv 2026) — **TextSeal**, built on Gumbel-max sampling. |
+| `task1/3976_Provable_Robust_Watermark.pdf` | "Provable Robust Watermarking for AI-Generated Text" (Zhao et al., ICLR 2024) — the **Unigram** watermark (fixed global green list). |
+| `task1/watermark.ppt` | Scott Aaronson's talk slides "Watermarking GPT Outputs" — the **Gumbel-Max** scheme (verified via file metadata: author Scott Aaronson, PowerPoint, last saved Dec 2022). |
 | `.env.example` | Placeholder for `API_KEY` — presumably the leaderboard submission API key referenced by `submission_template.py` in the spec. *(Assumption: this key corresponds to `YOUR_API_KEY_HERE` in the submission template.)* |
-| `Task 1/Intro-final.pdf` | Logistics only (schedule, WiFi, Discord, prizes, jury). Useful for context, not for solving the task. |
+| `task1/Intro-final.pdf` | Logistics only (schedule, WiFi, Discord, prizes, jury). Useful for context, not for solving the task. |
 
 ### Task summary (from the spec)
 
@@ -74,13 +74,13 @@ Constraints: every test `document_id` exactly once, no extras/duplicates, scores
 
 | File | Why irrelevant to Task 1 |
 |---|---|
-| `Task 1/mgi.pdf` | "MGI: Member vs Generated Inference" (Zhao, Meintz, Xu, Boenisch, Dziedzic — CISPA). This is the reference paper for **Task 2** (fool an M/N/G classifier on images). |
-| `Task 1/2112.02918v2.pdf` | "When the Curious Abandon Honesty: Federated Learning Is Not Private" (Boenisch et al.). Reference for **Task 3** (data reconstruction from gradients). |
-| `Task 1/Tasks-Final.pdf` (pages 14–31) | Task 2 (MGI) and Task 3 (gradient reconstruction) slides — other tasks. |
-| `Task 1/.claude/settings.local.json` | Local Claude Code tool permissions; not project material. |
-| `Task 1/Intro-final.pdf` | Event logistics only. |
+| `task1/mgi.pdf` | "MGI: Member vs Generated Inference" (Zhao, Meintz, Xu, Boenisch, Dziedzic — CISPA). This is the reference paper for **Task 2** (fool an M/N/G classifier on images). |
+| `task1/2112.02918v2.pdf` | "When the Curious Abandon Honesty: Federated Learning Is Not Private" (Boenisch et al.). Reference for **Task 3** (data reconstruction from gradients). |
+| `task1/Tasks-Final.pdf` (pages 14–31) | Task 2 (MGI) and Task 3 (gradient reconstruction) slides — other tasks. |
+| `task1/.claude/settings.local.json` | Local Claude Code tool permissions; not project material. |
+| `task1/Intro-final.pdf` | Event logistics only. |
 
-*(Note: `mgi.pdf` and `2112.02918v2.pdf` sit inside the `Task 1/` folder but clearly belong to Tasks 2 and 3.)*
+*(Note: `mgi.pdf` and `2112.02918v2.pdf` sit inside the `task1/` folder but clearly belong to Tasks 2 and 3.)*
 
 ---
 
@@ -152,7 +152,7 @@ Expected YAML contents (from spec, exact values unknown until obtained):
 Other config-adjacent files:
 
 - `.env.example` → `API_KEY="YOUR_API_KEY"` (leaderboard submission key; real `.env` is gitignored).
-- `Task 1/.claude/settings.local.json` → Claude Code permission allowlist only.
+- `task1/.claude/settings.local.json` → Claude Code permission allowlist only.
 
 ---
 
@@ -185,7 +185,7 @@ Assumptions made in this report (marked throughout):
 
 - **[A1]** `.env.example`'s `API_KEY` is the leaderboard submission key used by `submission_template.py`.
 - **[A2]** The dataset is distributed as zipped `.jsonl` (inferred from "code to unzip and load the dataset").
-- **[A3]** `mgi.pdf` and `2112.02918v2.pdf` were placed in `Task 1/` for team reference only and are not needed for Task 1.
+- **[A3]** `mgi.pdf` and `2112.02918v2.pdf` were placed in `task1/` for team reference only and are not needed for Task 1.
 - **[A4]** Detector parameters in the YAML will follow the parameterizations of the four cited papers (γ/δ/context for KGW, etc.).
 - **[A5]** A CUDA-capable GPU will be needed to faithfully reproduce KGW greenlists (spec's Philox note), and likely useful for running Qwen2.5-7B for perplexity/logit-based features.
 

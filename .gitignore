@@ -16,9 +16,7 @@ __pycache__/
 wandb/
 
 # Data & outputs (never commit datasets or results)
-# NOTE: Task 1/data + Task 1/cache are intentionally tracked (committed before
-# these rules; needed to reproduce the Task 1 solution) — ignore rules only
-# affect new untracked files.
+# Organiser datasets, caches and submissions are not part of this repository.
 data/
 output/
 outputs/
@@ -28,8 +26,8 @@ outputs/
 *.npy
 *.npz
 
-# cloned third-party detector repos (pinned via Task 1/data/watermark_config.yaml)
-Task 1/external/
+# cloned third-party detector repos (pinned via task1/data/watermark_config.yaml)
+task1/external/
 
 # editor / tooling local state
 .idea/
