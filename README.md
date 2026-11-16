@@ -2,9 +2,9 @@
 
 Code and research notes of team **!!1337** at the Grand Finale of the CISPA European
 Cybersecurity and AI Hackathon Championship (CISPA Helmholtz Center for Information
-Security, July 2026). The team qualified as one of the three winning teams of the
+Security, July 2026). The team qualified by winning the
 [Vienna regional round](https://github.com/florianzainzinger1/cispa-hackathon-championship-vienna)
-and finished **4th overall** in the finale.
+(1st place) and finished **4th place** in the European Grand Finale.
 
 The finale was a 24-hour competition on trustworthy machine learning. Tasks were
 scored on hidden leaderboards and run on GPU nodes of the JURECA supercomputer
@@ -75,4 +75,4 @@ The reports in this repository are partly written by these agents as working not
 ## Context
 
 - Organiser: [CISPA Helmholtz Center for Information Security](https://cispa.de), SprintML group
-- Vienna qualifier (one of three winning teams): [cispa-hackathon-championship-vienna](https://github.com/florianzainzinger1/cispa-hackathon-championship-vienna)
+- Vienna qualifier (1st place): [cispa-hackathon-championship-vienna](https://github.com/florianzainzinger1/cispa-hackathon-championship-vienna)
