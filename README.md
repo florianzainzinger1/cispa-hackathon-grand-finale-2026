@@ -69,9 +69,6 @@ end-to-end without that data.
 | Albin | Task 3 merged pipeline, setup |
 | Mansur | Team member |
 
-Tooling note: the team used AI coding assistants (Claude Code) heavily during the event.
-The reports in this repository are partly written by these agents as working notes.
-
 ## Context
 
 - Organiser: [CISPA Helmholtz Center for Information Security](https://cispa.de), SprintML group
